@@ -6,12 +6,13 @@ const API_URL = import.meta.env.VITE_ADMIN_API_URL || "http://127.0.0.1:8100";
 export default function App() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState(() => localStorage.getItem("medassist_admin_token") || "");
   const [instanceId, setInstanceId] = useState("");
   const [instance, setInstance] = useState(null);
   const [prep, setPrep] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [lookingUpInstance, setLookingUpInstance] = useState(false);
   const [runningTest, setRunningTest] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connection, setConnection] = useState(null);
@@ -38,6 +39,7 @@ export default function App() {
 
     if (!response.ok) {
       if (response.status === 401) {
+        localStorage.removeItem("medassist_admin_token");
         setToken("");
         throw new Error(data.detail || "Session expired. Please log in again.");
       }
@@ -74,6 +76,7 @@ export default function App() {
         throw new Error("Login response did not contain an access token.");
       }
 
+      localStorage.setItem("medassist_admin_token", data.access_token);
       setToken(data.access_token);
       setPassword("");
       setMessage("Login successful. Admin controller is ready.");
@@ -90,6 +93,7 @@ export default function App() {
       pollRef.current = null;
     }
 
+    localStorage.removeItem("medassist_admin_token");
     setToken("");
     setUsername("");
     setPassword("");
@@ -135,7 +139,7 @@ export default function App() {
       return;
     }
 
-    setLoading(true);
+    setLookingUpInstance(true);
 
     try {
       const response = await fetch(
@@ -154,7 +158,7 @@ export default function App() {
     } catch (error) {
       setMessage(error.message || "Failed to retrieve the instance.");
     } finally {
-      setLoading(false);
+      setLookingUpInstance(false);
     }
   }
 
@@ -351,230 +355,305 @@ export default function App() {
 
   return (
     <main className="admin-page">
-      <section className="admin-card">
-        <div className="admin-icon">M</div>
+      <aside className="admin-sidebar">
+        <div className="brand">
+          <div className="brand-mark" aria-hidden="true">M</div>
+          <div>
+            <p className="brand-name">MedAssist</p>
+            <p className="brand-subtitle">Admin Controller</p>
+          </div>
+        </div>
 
-        <p className="eyebrow">MEDASSIST</p>
-        <h1>Admin Control Panel</h1>
-
-        <p className="subtitle">
-          Secure access to your AI inference deployment.
-        </p>
-
-        {!token ? (
-          <form onSubmit={handleLogin}>
-            <label htmlFor="username">Admin login ID</label>
-
-            <input
-              id="username"
-              autoComplete="username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              required
-            />
-
-            <label htmlFor="password">Password</label>
-
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-
-            <button type="submit" disabled={loading}>
-              {loading ? "Signing in..." : "Secure login"}
+        <p className="sidebar-label">Workspace</p>
+        <nav className="sidebar-nav" aria-label="Main navigation">
+          <div className="nav-item active" aria-current="page">
+            <span className="nav-symbol" aria-hidden="true">⌂</span>
+            Controller
+          </div>
+          {token && (
+            <button className="nav-item" onClick={handleLogout}>
+              <span className="nav-symbol" aria-hidden="true">↪</span>
+              Log out
             </button>
-          </form>
-        ) : (
-          <div className="dashboard">
-            <div className="status">
-              <span className="status-dot" />
-              Authenticated
-            </div>
+          )}
+        </nav>
 
-            <h2>Deployment controller</h2>
+        <div className="sidebar-bottom">
+          <strong>Secure workspace</strong>
+          Manage your AI inference deployment.
+        </div>
+      </aside>
 
+      <section className="admin-main">
+        <header className="page-heading">
+          <div>
+            <p className="heading-kicker">MEDASSIST / CONTROL CENTER</p>
+            <h1>{token ? "Welcome back, Admin" : "Welcome to MedAssist"}</h1>
             <p className="subtitle">
-              Enter the ID of your existing Vast.ai instance. This panel does
-              not create or destroy instances.
+              {token
+                ? "Manage and prepare your existing Vast.ai instance."
+                : "Sign in securely to manage your AI inference deployment."}
             </p>
+          </div>
+          <div className="online-pill">
+            <span className="online-dot" />
+            {token ? "Controller access" : "Secure login"}
+          </div>
+        </header>
 
-            <button onClick={checkController} disabled={loading}>
-              Check controller
-            </button>
+        <section className="admin-card">
+          {!token ? (
+            <>
+              <div className="login-heading">
+                <div className="admin-icon" aria-hidden="true">↗</div>
+                <div>
+                  <h2>Admin login</h2>
+                  <p className="subtitle">Sign in to continue to your controller.</p>
+                </div>
+              </div>
 
-            <form onSubmit={lookupInstance}>
-              <label htmlFor="instanceId">Vast.ai instance ID</label>
+              <form className="login-form" onSubmit={handleLogin}>
+                <label htmlFor="username">Admin login ID</label>
+                <input
+                  id="username"
+                  autoComplete="username"
+                  placeholder="Enter your admin login ID"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  required
+                />
 
-              <input
-                id="instanceId"
-                inputMode="numeric"
-                autoComplete="off"
-                placeholder="Enter your instance ID"
-                value={instanceId}
-                onChange={(event) => setInstanceId(event.target.value)}
-                required
-              />
+                <label htmlFor="password">Password</label>
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                />
 
-              <button type="submit" disabled={loading}>
-                {loading ? "Checking..." : "Verify instance"}
-              </button>
-            </form>
-
-            {instance && (
-              <section className="instances-section">
-                <h3>Instance details</h3>
-
-                <article className="instance-item">
-                  <h4>{instance.gpu_name || "GPU name unavailable"}</h4>
-
-                  <p>
-                    <strong>Instance ID:</strong> {instance.id ?? instanceId}
-                  </p>
-
-                  <p>
-                    <strong>Status:</strong>{" "}
-                    {instance.actual_status || instance.cur_state || "Unknown"}
-                  </p>
-
-                  {instance.num_gpus != null && (
-                    <p>
-                      <strong>GPU count:</strong> {instance.num_gpus}
-                    </p>
-                  )}
-
-                  {instance.cpu_cores != null && (
-                    <p>
-                      <strong>CPU cores:</strong> {instance.cpu_cores}
-                    </p>
-                  )}
-
-                  {instance.gpu_ram != null && (
-                    <p>
-                      <strong>GPU RAM:</strong> {instance.gpu_ram}
-                    </p>
-                  )}
-
-                  {instance.cpu_ram != null && (
-                    <p>
-                      <strong>CPU RAM:</strong> {instance.cpu_ram}
-                    </p>
-                  )}
-                </article>
-
-                <button
-                  onClick={startPrepare}
-                  disabled={prep?.status === "running" || loading}
-                >
-                  {prep?.status === "running"
-                    ? "Preparing instance..."
-                    : "Install requirements & download model"}
+                <button type="submit" disabled={loading}>
+                  {loading ? "Signing in..." : "Secure login  →"}
                 </button>
+                <p className="form-note">
+                  <span aria-hidden="true">●</span> Your session is authenticated by the MedAssist controller.
+                </p>
+              </form>
+            </>
+          ) : (
+            <div className="dashboard">
+              <div className="section-intro">
+                <div className="admin-icon" aria-hidden="true">✓</div>
+                <div>
+                  <h2>Deployment controller</h2>
+                  <p className="subtitle">
+                    Check controller status, look up an existing instance, and prepare its model.
+                    This panel does not create or destroy instances.
+                  </p>
+                </div>
+              </div>
 
-                {prep && (
-                  <section className="prepare-status" aria-live="polite">
-                    <h3>Preparation status</h3>
+              <section className="controller-panel">
+                <div className="panel-heading">
+                  <div className="panel-icon" aria-hidden="true">⌁</div>
+                  <div>
+                    <h3>Check Controller</h3>
+                    <p className="subtitle">Verify that the admin controller is running and accessible.</p>
+                  </div>
+                </div>
+                <button onClick={checkController} disabled={loading}>
+                  {loading ? "Checking controller..." : "Check Controller  →"}
+                </button>
+              </section>
 
-                    <p>
-                      <strong>Status:</strong> {prep.status}
-                    </p>
+              <form className="lookup-form" onSubmit={lookupInstance}>
+                <div className="panel-heading">
+                  <div className="panel-icon lookup-icon" aria-hidden="true">⌕</div>
+                  <div>
+                    <h3>Lookup Vast.ai Instance</h3>
+                    <p className="subtitle">Enter an instance ID to retrieve its details.</p>
+                  </div>
+                </div>
+                <label htmlFor="instanceId">Vast.ai instance ID</label>
+                <div className="lookup-row">
+                  <input
+                    id="instanceId"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="Enter your instance ID"
+                    value={instanceId}
+                    onChange={(event) => setInstanceId(event.target.value)}
+                    required
+                  />
+                  <button type="submit" disabled={lookingUpInstance || loading}>
+                    {lookingUpInstance ? "Looking up..." : "Get Instance Details"}
+                  </button>
+                </div>
+              </form>
 
-                    <p>
-                      <strong>Stage:</strong> {prep.stage || "Starting"}
-                    </p>
+              {lookingUpInstance && (
+                <section className="instance-loading" role="status" aria-live="polite">
+                  <span className="loading-spinner" aria-hidden="true" />
+                  <div>
+                    <h3>Fetching instance details</h3>
+                    <p>Connecting to Vast.ai and retrieving the instance information...</p>
+                  </div>
+                </section>
+              )}
 
-                    <p>{prep.detail || "Waiting for status..."}</p>
+              {instance && (
+                <section className="instances-section">
+                  <div className="section-title-row">
+                    <div>
+                      <p className="section-eyebrow">INSTANCE OVERVIEW</p>
+                      <h3>Instance details</h3>
+                    </div>
+                    <span className="instance-status">
+                      <span className="online-dot" />
+                      {instance.actual_status || instance.cur_state || "Status unknown"}
+                    </span>
+                  </div>
 
-                    {prep.status === "running" && (
-                      <>
-                        <progress
-                          value={progress}
-                          max="100"
-                          style={{ width: "100%" }}
-                        />
-                        <p>{progress}%</p>
-                      </>
-                    )}
+                  <article className="instance-item">
+                    <div className="instance-hero">
+                      <div className="instance-glyph" aria-hidden="true">▤</div>
+                      <div>
+                        <h4>{instance.gpu_name || "GPU name unavailable"}</h4>
+                        <p>Instance #{instance.id ?? instanceId}</p>
+                      </div>
+                    </div>
+                    <div className="instance-metrics">
+                      <div>
+                        <strong>GPU COUNT</strong>
+                        <span>{instance.num_gpus ?? "—"}</span>
+                      </div>
+                      <div>
+                        <strong>CPU CORES</strong>
+                        <span>{instance.cpu_cores ?? "—"}</span>
+                      </div>
+                      <div>
+                        <strong>GPU RAM</strong>
+                        <span>{instance.gpu_ram ?? "—"}</span>
+                      </div>
+                      <div>
+                        <strong>CPU RAM</strong>
+                        <span>{instance.cpu_ram ?? "—"}</span>
+                      </div>
+                    </div>
+                  </article>
 
-                    {prep.status === "done" && prep.model_ready && (
-                      <button onClick={runTest} disabled={runningTest}>
-                        {runningTest
-                          ? "Testing inference..."
-                          : "Connect / Run test"}
+                  <section className="prepare-card">
+                    <div className="prepare-heading">
+                      <div className="panel-heading">
+                        <div className="panel-icon prepare-icon" aria-hidden="true">↗</div>
+                        <div>
+                          <h3>Prepare Instance</h3>
+                          <p className="subtitle">Install requirements and download the model.</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={startPrepare}
+                        disabled={prep?.status === "running" || loading}
+                      >
+                        {prep?.status === "running"
+                          ? "Preparing instance..."
+                          : "Prepare Instance  →"}
                       </button>
-                    )}
+                    </div>
 
-                    {prep.status === "done" && prep.model_ready && (
-                      <section className="connection-panel" aria-live="polite">
-                        <h3>Chatbot connection</h3>
+                    {prep && (
+                      <section className="prepare-status" aria-live="polite">
+                        <div className="section-title-row">
+                          <div>
+                            <p className="section-eyebrow">PREPARATION PROGRESS</p>
+                            <h3>{prep.status === "done" ? "Preparation complete" : prep.status === "failed" ? "Preparation failed" : "Preparing your instance"}</h3>
+                          </div>
+                          <span className={`progress-value ${prep.status === "failed" ? "failed" : ""}`}>
+                            {prep.status === "running" ? `${progress}%` : prep.status === "done" ? "100%" : prep.status}
+                          </span>
+                        </div>
 
-                        {connection?.connected ? (
+                        <div className="progress-steps">
+                          {["Queued", "Downloading", "Installing", "Configuring", "Testing", "Completed"].map((step, index) => {
+                            const currentStage = (prep.stage || prep.status || "").toLowerCase();
+                            const completed = prep.status === "done" || index < Math.max(0, ["queued", "downloading", "installing", "configuring", "testing", "completed"].indexOf(currentStage));
+                            const active = prep.status === "running" && currentStage.includes(step.toLowerCase());
+                            return (
+                              <div key={step} className={`progress-step ${completed ? "completed" : ""} ${active ? "active" : ""}`}>
+                                <span className="step-dot">{completed ? "✓" : index + 1}</span>
+                                <span>{step}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <progress value={prep.status === "done" ? 100 : progress} max="100" />
+                        <p className="prepare-detail">{prep.detail || "Waiting for status..."}</p>
+
+                        {prep.status === "done" && prep.model_ready && (
                           <>
-                            <p className="status">
-                              <span className="status-dot" />
-                              Connected — Qwen is ready
-                            </p>
-
-                            <p>
-                              Local inference URL:{" "}
-                              <code>http://127.0.0.1:18000</code>
-                            </p>
-
-                            <button
-                              className="secondary"
-                              onClick={disconnectChatbot}
-                              disabled={connecting}
-                            >
-                              {connecting ? "Disconnecting..." : "Disconnect"}
+                            <button className="test-button" onClick={runTest} disabled={runningTest}>
+                              {runningTest ? "Testing inference..." : "Connect / Run test"}
                             </button>
-                          </>
-                        ) : (
-                          <>
-                            <p>
-                              Connect your local MedAssist backend to the
-                              running inference service.
-                            </p>
+                            <section className="connection-panel" aria-live="polite">
+                              <div className="section-title-row">
+                                <div>
+                                  <p className="section-eyebrow">CHATBOT SERVICE</p>
+                                  <h3>Chatbot connection</h3>
+                                </div>
+                                {connection?.connected && (
+                                  <span className="instance-status"><span className="online-dot" />Connected</span>
+                                )}
+                              </div>
 
-                            <button
-                              onClick={connectToChatbot}
-                              disabled={connecting || runningTest}
-                            >
-                              {connecting
-                                ? "Connecting to Qwen..."
-                                : "Connect to MedAssist"}
-                            </button>
+                              {connection?.connected ? (
+                                <>
+                                  <p className="connection-ready">Qwen is ready for MedAssist.</p>
+                                  <p>Local inference URL: <code>http://127.0.0.1:18000</code></p>
+                                  <button className="secondary" onClick={disconnectChatbot} disabled={connecting}>
+                                    {connecting ? "Disconnecting..." : "Disconnect"}
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="subtitle">Connect your local MedAssist backend to the running inference service.</p>
+                                  <button onClick={connectToChatbot} disabled={connecting || runningTest}>
+                                    {connecting ? "Connecting to Qwen..." : "Connect to MedAssist"}
+                                  </button>
+                                </>
+                              )}
+                            </section>
                           </>
+                        )}
+
+                        {prep.status === "failed" && (
+                          <p className="error-detail" role="alert">
+                            Preparation failed. Review the backend terminal for diagnostic details before retrying.
+                          </p>
                         )}
                       </section>
                     )}
-
-                    {prep.status === "failed" && (
-                      <p role="alert">
-                        Preparation failed. Review the backend terminal for
-                        diagnostic details before retrying.
-                      </p>
-                    )}
                   </section>
-                )}
-              </section>
-            )}
+                </section>
+              )}
 
-            <button className="secondary" onClick={handleLogout}>
-              Log out
-            </button>
-          </div>
-        )}
+              <button className="secondary logout-button" onClick={handleLogout}>
+                Log out
+              </button>
+            </div>
+          )}
 
-        {message && (
-          <p className="message" role="status" aria-live="polite">
-            {message}
-          </p>
-        )}
+          {message && (
+            <p className="message" role="status" aria-live="polite">
+              <span className="message-mark" aria-hidden="true">✓</span>
+              {message}
+            </p>
+          )}
+        </section>
 
-        <p className="footer">Private administrator access</p>
+        <p className="footer">MedAssist · Private administrator access</p>
       </section>
     </main>
   );
