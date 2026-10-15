@@ -6,12 +6,13 @@ const API_URL = import.meta.env.VITE_ADMIN_API_URL || "http://127.0.0.1:8100";
 export default function App() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState(() => localStorage.getItem("medassist_admin_token") || "");
   const [instanceId, setInstanceId] = useState("");
   const [instance, setInstance] = useState(null);
   const [prep, setPrep] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [lookingUpInstance, setLookingUpInstance] = useState(false);
   const [runningTest, setRunningTest] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connection, setConnection] = useState(null);
@@ -38,6 +39,7 @@ export default function App() {
 
     if (!response.ok) {
       if (response.status === 401) {
+        localStorage.removeItem("medassist_admin_token");
         setToken("");
         throw new Error(data.detail || "Session expired. Please log in again.");
       }
@@ -74,6 +76,7 @@ export default function App() {
         throw new Error("Login response did not contain an access token.");
       }
 
+      localStorage.setItem("medassist_admin_token", data.access_token);
       setToken(data.access_token);
       setPassword("");
       setMessage("Login successful. Admin controller is ready.");
@@ -90,6 +93,7 @@ export default function App() {
       pollRef.current = null;
     }
 
+    localStorage.removeItem("medassist_admin_token");
     setToken("");
     setUsername("");
     setPassword("");
@@ -135,7 +139,7 @@ export default function App() {
       return;
     }
 
-    setLoading(true);
+    setLookingUpInstance(true);
 
     try {
       const response = await fetch(
@@ -154,7 +158,7 @@ export default function App() {
     } catch (error) {
       setMessage(error.message || "Failed to retrieve the instance.");
     } finally {
-      setLoading(false);
+      setLookingUpInstance(false);
     }
   }
 
@@ -483,11 +487,21 @@ export default function App() {
                     onChange={(event) => setInstanceId(event.target.value)}
                     required
                   />
-                  <button type="submit" disabled={loading}>
-                    {loading ? "Looking up..." : "Get Instance Details"}
+                  <button type="submit" disabled={lookingUpInstance || loading}>
+                    {lookingUpInstance ? "Looking up..." : "Get Instance Details"}
                   </button>
                 </div>
               </form>
+
+              {lookingUpInstance && (
+                <section className="instance-loading" role="status" aria-live="polite">
+                  <span className="loading-spinner" aria-hidden="true" />
+                  <div>
+                    <h3>Fetching instance details</h3>
+                    <p>Connecting to Vast.ai and retrieving the instance information...</p>
+                  </div>
+                </section>
+              )}
 
               {instance && (
                 <section className="instances-section">
